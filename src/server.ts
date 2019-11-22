@@ -1,6 +1,6 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import bodyParser from 'body-parser';
-import {filterImageFromURL, deleteLocalFiles} from './util/util';
+import {filterImageFromURL, deleteLocalFiles, isUrl} from './util/util';
 
 (async () => {
 
@@ -13,24 +13,47 @@ import {filterImageFromURL, deleteLocalFiles} from './util/util';
   // Use the body parser middleware for post requests
   app.use(bodyParser.json());
 
-  // @TODO1 IMPLEMENT A RESTFUL ENDPOINT
   // GET /filteredimage?image_url={{URL}}
-  // endpoint to filter an image from a public url.
-  // IT SHOULD
-  //    1
-  //    1. validate the image_url query
-  //    2. call filterImageFromURL(image_url) to filter the image
-  //    3. send the resulting file in the response
-  //    4. deletes any files on the server on finish of the response
+  // endpoint to filter an image from a public url
   // QUERY PARAMATERS
   //    image_url: URL of a publicly accessible image
   // RETURNS
-  //   the filtered image file [!!TIP res.sendFile(filteredpath); might be useful]
+  //   the filtered image file
+  app.get("/filteredimage/", async (req: Request, res: Response) => {
+    // Accesses the image_url query
+    let { image_url }: { image_url: string } = req.query;
 
-  /**************************************************************************** */
+    // Validates the image_url query
+    if (image_url == null) {
+      return res.status(400)
+        .send("An image URL is required");
+    }
+    if (!isUrl(image_url)) {
+      return res.status(400)
+        .send("Provided URL is not valid");
+    }
 
-  //! END @TODO1
-  
+    // Filters the image, sends the resulting file in the response and deletes it from the server
+    let filteredImage: string = null;
+    try {
+      filteredImage = await filterImageFromURL(image_url);
+      return res.status(200)
+        .sendFile(filteredImage, (error: Error) => {
+          deleteLocalFiles([filteredImage]);
+          if (error != null) {
+            return res.status(500)
+              .send(`System internal error: ${error.message}`);
+          }
+        });
+    } catch (error) {
+      if (filteredImage != null) {
+        deleteLocalFiles([filteredImage]);
+      }
+      return res.status(500)
+        .send(`System internal error: ${error.message}`);
+    }
+  });
+
   // Root Endpoint
   // Displays a simple message to the user
   app.get( "/", async ( req, res ) => {
